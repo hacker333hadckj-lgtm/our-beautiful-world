@@ -1,1 +1,254 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>عالمنا الجميل M❤H</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #fff0f5;
+      color: #593b4a;
+    }
+    .container {
+      max-width: 600px;
+      margin: 25px auto;
+      padding: 15px;
+    }
+    h1 {
+      text-align: center;
+      color: #d65385;
+      font-size: 27px;
+    }
+    .panel {
+      background: white;
+      padding: 20px;
+      border-radius: 18px;
+      box-shadow: 0 4px 15px #e8b8ca55;
+    }
+    input, button {
+      width: 100%;
+      padding: 13px;
+      margin: 8px 0;
+      border-radius: 10px;
+      border: 1px solid #edc4d4;
+      font-size: 16px;
+    }
+    button {
+      background: #dc6b98;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    #chat { display: none; }
+    #messages {
+      height: 380px;
+      overflow-y: auto;
+      padding: 12px;
+      background: #fff7fa;
+      border-radius: 12px;
+      margin: 15px 0;
+    }
+    .message {
+      background: #f9dce8;
+      padding: 10px;
+      border-radius: 12px;
+      margin: 8px 0;
+      max-width: 85%;
+      overflow-wrap: anywhere;
+    }
+    .mine {
+      background: #e8dafa;
+      margin-right: auto;
+    }
+    .time {
+      font-size: 11px;
+      color: #987b89;
+      margin-top: 5px;
+    }
+    #status {
+      text-align: center;
+      color: #a14b70;
+      margin: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>عالمنا الجميل M❤H</h1>
+
+    <div class="panel" id="login">
+      <h3>أهلاً بك في عالمنا الجميل 💗</h3>
+      <input id="email" type="email" placeholder="البريد الإلكتروني">
+      <input id="password" type="password" placeholder="كلمة المرور">
+      <button onclick="signIn()">دخول إلى عالمنا</button>
+      <p id="status"></p>
+    </div>
+
+    <div class="panel" id="chat">
+      <h3>رسائلنا الجميلة 💕</h3>
+      <div id="messages"></div>
+      <input id="message" type="text" placeholder="اكتب رسالتك هنا...">
+      <button onclick="sendMessage()">إرسال ❤️</button>
+      <button onclick="signOut()" style="background:#aaa">تسجيل الخروج</button>
+      <p id="chatStatus"></p>
+    </div>
+  </div>
+
+<script>
+const SUPABASE_URL = "https://xqxcgfurwlhcrceglovz.supabase.co";
 const SUPABASE_KEY = "sb_publishable_PZppGx2c_YnLz19Ky81hKg_hNrFWggg";
+
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let currentUser = null;
+let conversationId = null;
+let channel = null;
+
+async function signIn() {
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value;
+  const status = document.getElementById("status");
+
+  status.textContent = "جارٍ تسجيل الدخول...";
+
+  const { data, error } = await db.auth.signInWithPassword({
+    email,
+    password
+  });
+
+  if (error) {
+    status.textContent = "تعذر الدخول: " + error.message;
+    return;
+  }
+
+  currentUser = data.user;
+  await openChat();
+}
+
+async function openChat() {
+  document.getElementById("login").style.display = "none";
+  document.getElementById("chat").style.display = "block";
+
+  document.getElementById("chatStatus").textContent =
+    "جارٍ تحميل المحادثة...";
+
+  const { data, error } = await db
+    .from("conversations")
+    .select("id")
+    .or(
+      `user1_id.eq.${currentUser.id},user2_id.eq.${currentUser.id}`
+    )
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) {
+    document.getElementById("chatStatus").textContent =
+      "لم يتم العثور على المحادثة. تحقق من إعدادات قاعدة البيانات.";
+    return;
+  }
+
+  conversationId = data.id;
+  await loadMessages();
+  listenForMessages();
+
+  document.getElementById("chatStatus").textContent =
+    "أهلاً بكما في عالمنا الجميل ❤️";
+}
+
+async function loadMessages() {
+  const { data, error } = await db
+    .from("messages")
+    .select("*")
+    .eq("conversation_id", conversationId)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    document.getElementById("chatStatus").textContent =
+      "تعذر تحميل الرسائل: " + error.message;
+    return;
+  }
+
+  const box = document.getElementById("messages");
+  box.innerHTML = "";
+
+  data.forEach(addMessage);
+  box.scrollTop = box.scrollHeight;
+}
+
+function addMessage(msg) {
+  const box = document.getElementById("messages");
+  const div = document.createElement("div");
+
+  div.className = "message" +
+    (msg.sender_id === currentUser.id ? " mine" : "");
+
+  const content = document.createElement("div");
+  content.textContent = msg.content;
+
+  const time = document.createElement("div");
+  time.className = "time";
+  time.textContent = new Date(msg.created_at).toLocaleString("ar");
+
+  div.appendChild(content);
+  div.appendChild(time);
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+async function sendMessage() {
+  const input = document.getElementById("message");
+  const content = input.value.trim();
+
+  if (!content || !conversationId) return;
+
+  const { error } = await db.from("messages").insert({
+    conversation_id: conversationId,
+    sender_id: currentUser.id,
+    content: content
+  });
+
+  if (error) {
+    document.getElementById("chatStatus").textContent =
+      "تعذر إرسال الرسالة: " + error.message;
+    return;
+  }
+
+  input.value = "";
+}
+
+function listenForMessages() {
+  if (channel) db.removeChannel(channel);
+
+  channel = db
+    .channel("our-beautiful-chat")
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "messages",
+        filter: `conversation_id=eq.${conversationId}`
+      },
+      payload => {
+        addMessage(payload.new);
+      }
+    )
+    .subscribe();
+}
+
+async function signOut() {
+  if (channel) await db.removeChannel(channel);
+  await db.auth.signOut();
+  location.reload();
+}
+
+document.getElementById("message").addEventListener("keydown", e => {
+  if (e.key === "Enter") sendMessage();
+});
+</script>
+</body>
+</html>
